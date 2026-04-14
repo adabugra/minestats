@@ -1,0 +1,125 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+type API struct {
+	cfg    Config
+	db     *sql.DB
+	poller *Poller
+}
+
+func NewAPI(cfg Config, db *sql.DB, poller *Poller) *API {
+	return &API{cfg: cfg, db: db, poller: poller}
+}
+
+func (a *API) Routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/health", a.handleHealth)
+	mux.HandleFunc("/api/servers", a.handleServers)
+	mux.HandleFunc("/api/history", a.handleHistory)
+	return withCORS(mux)
+}
+
+func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleServers(w http.ResponseWriter, r *http.Request) {
+	type serverInfo struct {
+		ID             string  `json:"id"`
+		Name           string  `json:"name"`
+		Address        string  `json:"address"`
+		RefreshSeconds int     `json:"refresh_seconds"`
+		LastSample     *Sample `json:"last_sample"`
+	}
+
+	latest := a.poller.Latest()
+	servers := make([]serverInfo, 0, len(a.cfg.Servers))
+	for _, s := range a.cfg.Servers {
+		entry := serverInfo{ID: s.ID, Name: s.Name, Address: s.Address, RefreshSeconds: s.RefreshSeconds}
+		if sample, ok := latest[s.ID]; ok {
+			sCopy := sample
+			entry.LastSample = &sCopy
+		}
+		servers = append(servers, entry)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"generated_at": time.Now().UnixMilli(),
+		"servers":      servers,
+	})
+}
+
+func (a *API) handleHistory(w http.ResponseWriter, r *http.Request) {
+	minutes := 60
+	if q := r.URL.Query().Get("minutes"); q != "" {
+		v, err := strconv.Atoi(q)
+		if err == nil && v >= 1 && v <= 10080 {
+			minutes = v
+		}
+	}
+
+	from := time.Now().Add(-time.Duration(minutes) * time.Minute).UnixMilli()
+	rows, err := a.db.QueryContext(r.Context(), `
+SELECT server_id, ts_ms, online_players, is_online
+FROM samples
+WHERE ts_ms >= ?
+ORDER BY ts_ms ASC;`, from)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "query failed"})
+		return
+	}
+	defer rows.Close()
+
+	series := make(map[string][][2]any, len(a.cfg.Servers))
+	for _, s := range a.cfg.Servers {
+		series[s.ID] = make([][2]any, 0, minutes*60)
+	}
+
+	for rows.Next() {
+		var serverID string
+		var ts int64
+		var onlinePlayers sql.NullInt64
+		var isOnline int
+		if err := rows.Scan(&serverID, &ts, &onlinePlayers, &isOnline); err != nil {
+			continue
+		}
+		value := any(nil)
+		if isOnline == 1 && onlinePlayers.Valid {
+			value = onlinePlayers.Int64
+		}
+		series[serverID] = append(series[serverID], [2]any{ts, value})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":    from,
+		"to":      time.Now().UnixMilli(),
+		"minutes": minutes,
+		"series":  series,
+	})
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,OPTIONS")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

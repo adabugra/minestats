@@ -1,0 +1,25 @@
+{
+  "listen_addr": ":8080",
+  "database_path": "./backend/data/minestats.db",
+  "history_retention_hours": 168,
+  "servers": [
+    {
+      "id": "hypixel",
+      "name": "Hypixel",
+      "address": "mc.hypixel.net:25565",
+      "refresh_seconds": 1
+    },
+    {
+      "id": "cubecraft",
+      "name": "CubeCraft",
+      "address": "play.cubecraft.net:25565",
+      "refresh_seconds": 2
+    },
+    {
+      "id": "craftlime",
+      "name": "CraftLime",
+      "address": "mc.craftlime.net:25565",
+      "refresh_seconds": 3
+    }
+  ]
+}
