@@ -1,0 +1,13 @@
+{$SITE_ADDRESS}
+
+encode zstd gzip
+
+@api path /api/*
+reverse_proxy @api backend:8080
+
+@ws path /ws/*
+reverse_proxy @ws backend:8080
+
+root * /usr/share/caddy
+try_files {path} /index.html
+file_server

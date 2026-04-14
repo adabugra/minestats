@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: minestats-backend
+    command: ["-config", "/app/config.json"]
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - minestats_data:/app/backend/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: ""
+        VITE_WS_BASE: ""
+    container_name: minestats-frontend
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  minestats_data:
