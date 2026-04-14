@@ -7,24 +7,23 @@ services:
     volumes:
       - ./config.json:/app/config.json:ro
       - minestats_data:/app/backend/data
+    expose:
+      - "8080"
     ports:
-      - "8080:8080"
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE: ""
-        VITE_WS_BASE: ""
+        VITE_API_BASE: ${VITE_API_BASE:-}
+        VITE_WS_BASE: ${VITE_WS_BASE:-}
     container_name: minestats-frontend
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     depends_on:
       - backend
     ports:
-      - "80:80"
-      - "443:443"
+      - "${APP_BIND_IP:-0.0.0.0}:${APP_PORT:-5000}:80"
     restart: unless-stopped
 
 volumes:

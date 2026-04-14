@@ -75,7 +75,21 @@
     let themeMode: ThemeMode = "system";
     let isDark = false;
 
-    const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
+    function normalizeHttpBase(raw: string) {
+        const value = raw.trim();
+        if (!value) return "";
+        if (/^https?:\/\//i.test(value)) {
+            return value.replace(/\/+$/, "");
+        }
+        return `http://${value.replace(/\/+$/, "")}`;
+    }
+
+    const apiBaseEnv = normalizeHttpBase(import.meta.env.VITE_API_BASE ?? "");
+    const apiBase = apiBaseEnv
+        ? apiBaseEnv
+        : import.meta.env.DEV
+          ? "http://localhost:8080"
+          : window.location.origin;
 
     function applyTheme(mode: ThemeMode) {
         themeMode = mode;

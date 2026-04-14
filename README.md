@@ -1,9 +1,8 @@
-# MineStats: Multi Minecraft Server Tracker
+# MineStats: Minecraft Server Tracker
 
 Fast Minecraft server tracking with:
 - Go backend for high-frequency status packet polling
 - SQLite persistence for time-series history
-
 
 ## Run Backend
 
@@ -26,23 +25,20 @@ Frontend defaults to backend at `http://localhost:8080`.
 
 ## Run with Docker
 
-```bash
-docker compose up --build
-```
-
-After startup:
-- Frontend HTTP: `http://localhost`
-- Frontend HTTPS: `https://<your-domain>` (when `SITE_ADDRESS` is a real domain)
-
-Notes:
-- `config.json` is mounted into backend as read-only.
-- SQLite data is persisted in Docker volume `minestats_data`.
-- Backend is exposed on host port `8080`.
-- Frontend is exposed on host ports `80` and `443`.
-- To enable automatic HTTPS, run compose with a domain:
+Setup commands:
 
 ```bash
-SITE_ADDRESS=example.com docker compose up --build
+cp .env.example .env
+cp config.json.example config.json
+docker compose up -d --build
 ```
 
-If `SITE_ADDRESS` is left unset, frontend serves HTTP on port `80`.
+Default result:
+- Frontend on `0.0.0.0:5000`
+- Backend on `127.0.0.1:8080` (private to host by default)
+- SQLite persisted in Docker volume `minestats_data`
+
+All deploy knobs are in `.env`:
+- `APP_BIND_IP`, `APP_PORT`: public frontend binding
+- `BACKEND_BIND_IP`, `BACKEND_PORT`: optional direct backend host binding
+- `VITE_API_BASE`, `VITE_WS_BASE`: optional build-time overrides (leave empty for same-origin). If set, include `http://` or `https://` (frontend also auto-adds `http://` if omitted).
