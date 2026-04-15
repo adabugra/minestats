@@ -66,6 +66,7 @@
     const MINI_HISTORY_TTL_MS = 8 * 1000;
     const STATS_HISTORY_TTL_MS = 30 * 1000;
     const COMBINED_HISTORY_TTL_MS = 15 * 1000;
+    const COMBINED_LINE_BREAK_GAP_MS = 15 * 60 * 1000;
 
     let servers: ServerInfo[] = [];
     let statsSeries: Record<string, [number, number | null][]> = {};
@@ -179,6 +180,29 @@
         return rows.filter(
             (point): point is [number, number] => typeof point[1] === "number",
         );
+    }
+
+    function rowsWithBreaksForGaps(
+        rows: [number, number | null][],
+        maxGapMs: number,
+    ): [number, number | null][] {
+        if (rows.length < 2) return rows;
+
+        const out: [number, number | null][] = [];
+        let previousTs = rows[0][0];
+        out.push(rows[0]);
+
+        for (let i = 1; i < rows.length; i += 1) {
+            const point = rows[i];
+            const [ts] = point;
+            if (ts - previousTs > maxGapMs) {
+                out.push([previousTs + 1, null]);
+            }
+            out.push(point);
+            previousTs = ts;
+        }
+
+        return out;
     }
 
     function latestSampleValue(server: ServerInfo): number | null {
@@ -373,7 +397,10 @@
                         MINI_HISTORY_MINUTES,
                         MINI_HISTORY_TTL_MS,
                     ),
-                    fetchHistoryCached(activeMinutes(), COMBINED_HISTORY_TTL_MS),
+                    fetchHistoryCached(
+                        activeMinutes(),
+                        COMBINED_HISTORY_TTL_MS,
+                    ),
                 ]);
             if (!serversRes.ok) throw new Error("API request failed");
 
@@ -418,7 +445,7 @@
                     (server) => normalizeKey(server.id) === normalizeKey(key),
                 )?.name ?? key,
             color: serverColor(index),
-            data: numericRows(data),
+            data: rowsWithBreaksForGaps(data, COMBINED_LINE_BREAK_GAP_MS),
         }),
     );
 
