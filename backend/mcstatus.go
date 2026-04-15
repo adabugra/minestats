@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,7 +32,7 @@ type mcStatusResponse struct {
 		Max    int `json:"max"`
 		Online int `json:"online"`
 	} `json:"players"`
-	Description any `json:"description"`
+	Description any    `json:"description"`
 	Favicon     string `json:"favicon"`
 }
 
@@ -38,8 +40,15 @@ func QueryMinecraftStatus(ctx context.Context, address string) (MCStatus, error)
 	start := time.Now()
 	status := MCStatus{}
 
+	host, port, err := splitAddress(address)
+	if err != nil {
+		return status, err
+	}
+	dialHost, dialPort := resolveMinecraftEndpoint(ctx, host, port)
+	dialAddress := net.JoinHostPort(dialHost, strconv.Itoa(int(dialPort)))
+
 	dialer := &net.Dialer{Timeout: 2 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", address)
+	conn, err := dialer.DialContext(ctx, "tcp", dialAddress)
 	if err != nil {
 		return status, fmt.Errorf("dial: %w", err)
 	}
@@ -47,16 +56,11 @@ func QueryMinecraftStatus(ctx context.Context, address string) (MCStatus, error)
 
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 
-	host, port, err := splitAddress(address)
-	if err != nil {
-		return status, err
-	}
-
 	handshake := make([]byte, 0, 128)
 	handshake = append(handshake, encodeVarInt(0)...)    // packet id
 	handshake = append(handshake, encodeVarInt(47)...)   // protocol version
 	handshake = append(handshake, encodeString(host)...) // server address
-	handshake = binary.BigEndian.AppendUint16(handshake, port)
+	handshake = binary.BigEndian.AppendUint16(handshake, dialPort)
 	handshake = append(handshake, encodeVarInt(1)...) // next state = status
 
 	if err := writePacket(conn, handshake); err != nil {
@@ -127,15 +131,49 @@ func flattenMOTD(node map[string]any) string {
 }
 
 func splitAddress(address string) (string, uint16, error) {
-	host, portStr, found := strings.Cut(address, ":")
-	if !found {
-		return "", 0, fmt.Errorf("address %q missing port", address)
+	host, portStr, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid address %q: %w", address, err)
+	}
+	if host == "" {
+		return "", 0, fmt.Errorf("address %q missing host", address)
 	}
 	portI, err := net.LookupPort("tcp", portStr)
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid port %q: %w", portStr, err)
 	}
 	return host, uint16(portI), nil
+}
+
+func resolveMinecraftEndpoint(ctx context.Context, host string, port uint16) (string, uint16) {
+	if port != 25565 || net.ParseIP(host) != nil {
+		return host, port
+	}
+
+	_, records, err := net.DefaultResolver.LookupSRV(ctx, "minecraft", "tcp", host)
+	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			return host, port
+		}
+		return host, port
+	}
+	if len(records) == 0 {
+		return host, port
+	}
+
+	best := records[0]
+	for _, record := range records[1:] {
+		if record.Priority < best.Priority || (record.Priority == best.Priority && record.Weight > best.Weight) {
+			best = record
+		}
+	}
+
+	target := strings.TrimSuffix(best.Target, ".")
+	if target == "" {
+		return host, port
+	}
+	return target, best.Port
 }
 
 func encodeVarInt(value int) []byte {
