@@ -61,6 +61,11 @@
         "#6366f1",
     ];
     const FAVICON_CACHE_MS = 15 * 60 * 1000;
+    const MINI_HISTORY_MINUTES = 60;
+    const STATS_HISTORY_MINUTES = 24 * 60;
+    const MINI_HISTORY_TTL_MS = 8 * 1000;
+    const STATS_HISTORY_TTL_MS = 30 * 1000;
+    const COMBINED_HISTORY_TTL_MS = 15 * 1000;
 
     let servers: ServerInfo[] = [];
     let statsSeries: Record<string, [number, number | null][]> = {};
@@ -71,6 +76,13 @@
     let loading = true;
     let hasLoadedOnce = false;
     let faviconCache: Record<string, { value: string; updatedAt: number }> = {};
+    let historyCache: Record<
+        number,
+        {
+            fetchedAt: number;
+            series: Record<string, [number, number | null][]>;
+        }
+    > = {};
 
     let themeMode: ThemeMode = "system";
     let isDark = false;
@@ -328,15 +340,40 @@
         return normalizeHistorySeries(rawSeries);
     }
 
+    async function fetchHistoryCached(minutes: number, ttlMs: number) {
+        const nowMs = Date.now();
+        const cached = historyCache[minutes];
+        if (cached && nowMs - cached.fetchedAt < ttlMs) {
+            return cached.series;
+        }
+
+        const series = await fetchHistory(minutes);
+        const fetchedAt = Date.now();
+        historyCache = {
+            ...historyCache,
+            [minutes]: {
+                fetchedAt,
+                series,
+            },
+        };
+        return series;
+    }
+
     async function refresh() {
         try {
             if (!hasLoadedOnce) loading = true;
-            const [serversRes, rangeSeries, fixedStatsSeries, fixedMiniSeries] =
+            const [serversRes, fixedStatsSeries, fixedMiniSeries, rangeSeries] =
                 await Promise.all([
                     fetch(`${apiBase}/api/servers`),
-                    fetchHistory(activeMinutes()),
-                    fetchHistory(24 * 60),
-                    fetchHistory(60),
+                    fetchHistoryCached(
+                        STATS_HISTORY_MINUTES,
+                        STATS_HISTORY_TTL_MS,
+                    ),
+                    fetchHistoryCached(
+                        MINI_HISTORY_MINUTES,
+                        MINI_HISTORY_TTL_MS,
+                    ),
+                    fetchHistoryCached(activeMinutes(), COMBINED_HISTORY_TTL_MS),
                 ]);
             if (!serversRes.ok) throw new Error("API request failed");
 
@@ -358,7 +395,10 @@
 
     async function refreshCombinedSeries() {
         try {
-            combinedSeriesSource = await fetchHistory(activeMinutes());
+            combinedSeriesSource = await fetchHistoryCached(
+                activeMinutes(),
+                COMBINED_HISTORY_TTL_MS,
+            );
             errorMsg = "";
         } catch (err) {
             errorMsg = err instanceof Error ? err.message : "Unknown error";
