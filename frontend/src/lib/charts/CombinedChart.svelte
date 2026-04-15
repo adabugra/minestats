@@ -12,6 +12,7 @@
   let lastRangeKey = rangeKey;
   let lastSeriesRef = series;
   let animateNextSeriesUpdate = false;
+  let zoomWindow: { start: number; end: number } = { start: 0, end: 100 };
 
   function escapeHtml(value: string) {
     return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -139,8 +140,8 @@
       dataZoom: [
         {
           type: 'slider',
-          start: 0,
-          end: 100,
+          start: zoomWindow.start,
+          end: zoomWindow.end,
           height: 30,
           bottom: 40,
           textStyle: {
@@ -160,8 +161,8 @@
         },
         {
           type: 'inside',
-          start: 0,
-          end: 100
+          start: zoomWindow.start,
+          end: zoomWindow.end
         }
       ],
       series: series.map((entry, idx) => {
@@ -210,6 +211,15 @@
 
   onMount(() => {
     chart = echarts.init(el);
+    chart.on('datazoom', () => {
+      if (!chart) return;
+      const option = chart.getOption();
+      const zoom = option.dataZoom?.[0] as { start?: number; end?: number } | undefined;
+      if (!zoom) return;
+      if (typeof zoom.start === 'number' && typeof zoom.end === 'number') {
+        zoomWindow = { start: zoom.start, end: zoom.end };
+      }
+    });
     render();
 
     const resize = () => chart?.resize();
