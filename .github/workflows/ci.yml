@@ -42,10 +42,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Enable build scripts
-        working-directory: frontend
-        run: pnpm config set ignore-scripts false
-
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile

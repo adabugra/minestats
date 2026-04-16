@@ -14,19 +14,11 @@
   "dependencies": {
     "@tabler/icons-svelte": "^3.41.1",
     "echarts": "^6.0.0",
-    "svelte": "^5.38.7"
+    "svelte": "^5.55.4"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "typescript": "^5.9.3",
     "vite": "^7.3.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "ignoredBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
