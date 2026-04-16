@@ -44,7 +44,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         working-directory: frontend
