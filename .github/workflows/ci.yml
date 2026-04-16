@@ -42,9 +42,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Approve builds
+      - name: Enable build scripts
         working-directory: frontend
-        run: pnpm approve-builds --yes
+        run: pnpm config set ignore-scripts false
 
       - name: Install dependencies
         working-directory: frontend
