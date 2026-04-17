@@ -41,4 +41,4 @@ Default result:
 All deploy knobs are in `.env`:
 - `APP_BIND_IP`, `APP_PORT`: public frontend binding
 - `BACKEND_BIND_IP`, `BACKEND_PORT`: optional direct backend host binding
-- `VITE_API_BASE`, `VITE_WS_BASE`: optional build-time overrides (leave empty for same-origin). If set, include `http://` or `https://` (frontend also auto-adds `http://` if omitted).
+- `VITE_API_BASE`, `VITE_WS_BASE`: optional build-time overrides (leave empty for same-origin). If set, you must include `http://` or `https://`
