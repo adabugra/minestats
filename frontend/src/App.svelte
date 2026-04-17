@@ -41,6 +41,12 @@
         minutes: number;
     };
 
+    type RankedServer = {
+        server: ServerInfo;
+        originalIndex: number;
+        online: number | null;
+    };
+
     const ranges: RangeOption[] = [
         { key: "15m", label: "15m", minutes: 15 },
         { key: "1h", label: "1h", minutes: 60 },
@@ -216,6 +222,27 @@
 
     function currentOnline(server: ServerInfo, index = 0): number | null {
         return latestSeriesValue(server, index) ?? latestSampleValue(server);
+    }
+
+    function rankServersByOnline(currentServers: ServerInfo[]): RankedServer[] {
+        const ranked = currentServers.map((server, originalIndex) => ({
+            server,
+            originalIndex,
+            online: currentOnline(server, originalIndex),
+        }));
+
+        ranked.sort((a, b) => {
+            const aOnline = a.online;
+            const bOnline = b.online;
+            const aIsNum = typeof aOnline === "number";
+            const bIsNum = typeof bOnline === "number";
+
+            if (aIsNum && bIsNum && aOnline !== bOnline) return bOnline - aOnline;
+            if (aIsNum !== bIsNum) return aIsNum ? -1 : 1;
+            return a.server.name.localeCompare(b.server.name);
+        });
+
+        return ranked;
     }
 
     function totalOnline(currentServers: ServerInfo[]) {
@@ -455,9 +482,11 @@
     let peakOnline24h = 0;
     let themeLabel = "System";
     let themeIconComponent = IconDeviceDesktop;
+    let rankedServers: RankedServer[] = [];
 
     $: resolvedTotal = totalOnline(servers);
     $: peakOnline24h = totalPeak24h(servers);
+    $: rankedServers = rankServersByOnline(servers);
     $: themeLabel = modeLabel(themeMode);
     $: themeIconComponent =
         themeMode === "light"
@@ -568,7 +597,9 @@
     </section>
 
     <section class="grid-cards">
-        {#each servers as server, index}
+        {#each rankedServers as ranked (ranked.server.id)}
+            {@const server = ranked.server}
+            {@const index = ranked.originalIndex}
             {@const record = topRecord(server, index)}
             <article class="server-card">
                 <header>
