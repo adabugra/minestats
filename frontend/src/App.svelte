@@ -73,6 +73,7 @@
     const STATS_HISTORY_TTL_MS = 30 * 1000;
     const COMBINED_HISTORY_TTL_MS = 15 * 1000;
     const COMBINED_LINE_BREAK_GAP_MS = 15 * 60 * 1000;
+    const COMBINED_NULL_HOLD_MS = 10 * 1000;
 
     let servers: ServerInfo[] = [];
     let statsSeries: Record<string, [number, number | null][]> = {};
@@ -192,20 +193,32 @@
         rows: [number, number | null][],
         maxGapMs: number,
     ): [number, number | null][] {
-        if (rows.length < 2) return rows;
+        if (rows.length === 0) return rows;
+
+        let lastRealTs: number | null = null;
+        let lastKnownValue: number | null = null;
+        let lastKnownTs: number | null = null;
 
         const out: [number, number | null][] = [];
-        let previousTs = rows[0][0];
-        out.push(rows[0]);
-
-        for (let i = 1; i < rows.length; i += 1) {
-            const point = rows[i];
-            const [ts] = point;
-            if (ts - previousTs > maxGapMs) {
-                out.push([previousTs + 1, null]);
+        for (const [ts, value] of rows) {
+            if (typeof value === "number") {
+                if (lastRealTs !== null && ts - lastRealTs > maxGapMs) {
+                    out.push([lastRealTs + 1, null]);
+                }
+                out.push([ts, value]);
+                lastRealTs = ts;
+                lastKnownValue = value;
+                lastKnownTs = ts;
+                continue;
             }
-            out.push(point);
-            previousTs = ts;
+
+            if (
+                lastKnownValue !== null &&
+                lastKnownTs !== null &&
+                ts - lastKnownTs <= COMBINED_NULL_HOLD_MS
+            ) {
+                out.push([ts, lastKnownValue]);
+            }
         }
 
         return out;
