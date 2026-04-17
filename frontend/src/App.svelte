@@ -265,7 +265,7 @@
         }, 0);
     }
 
-    function totalPeak24h(currentServers: ServerInfo[]) {
+    function totalPeak24hInfo(currentServers: ServerInfo[]) {
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
         const totalsByTs = new Map<number, number>();
 
@@ -278,10 +278,14 @@
         }
 
         let peak = 0;
-        for (const total of totalsByTs.values()) {
-            if (total > peak) peak = total;
+        let peakTs: number | null = null;
+        for (const [ts, total] of totalsByTs.entries()) {
+            if (total > peak) {
+                peak = total;
+                peakTs = ts;
+            }
         }
-        return peak;
+        return { value: peak, ts: peakTs };
     }
 
     function status(server: ServerInfo, index: number) {
@@ -493,12 +497,14 @@
 
     let resolvedTotal = 0;
     let peakOnline24h = 0;
+    let peakOnline24hAt: number | null = null;
     let themeLabel = "System";
     let themeIconComponent = IconDeviceDesktop;
     let rankedServers: RankedServer[] = [];
 
     $: resolvedTotal = totalOnline(servers);
-    $: peakOnline24h = totalPeak24h(servers);
+    $: ({ value: peakOnline24h, ts: peakOnline24hAt } =
+        totalPeak24hInfo(servers));
     $: rankedServers = rankServersByOnline(servers);
     $: themeLabel = modeLabel(themeMode);
     $: themeIconComponent =
@@ -582,7 +588,14 @@
                     </span>
                     <p>24h Peak Online</p>
                 </div>
-                <strong>{peakOnline24h}</strong>
+                <strong>
+                    {peakOnline24h}
+                    {#if peakOnline24hAt}
+                        <span class="metric-count-time">
+                            {formatTopRecordTime(peakOnline24hAt)}
+                        </span>
+                    {/if}
+                </strong>
             </article>
         </div>
 

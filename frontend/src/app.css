@@ -206,6 +206,17 @@ body {
   color: var(--slate-900);
 }
 
+.metric-count-time {
+  margin-left: 8px;
+  font-size: 0.62rem;
+  color: #94a3b8;
+  line-height: 1.1;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .metric-icon {
   width: 15px;
   height: 15px;
@@ -535,6 +546,10 @@ body {
 :root.dark .hero-metrics strong,
 :root.dark .server-card h2 {
   color: #f1f5f9;
+}
+
+:root.dark .metric-count-time {
+  color: #94a3b8;
 }
 
 :root.dark .hero-description,
