@@ -234,7 +234,7 @@
     }
 
     function currentOnline(server: ServerInfo, index = 0): number | null {
-        return latestSeriesValue(server, index) ?? latestSampleValue(server);
+        return latestSampleValue(server) ?? latestSeriesValue(server, index);
     }
 
     function rankServersByOnline(currentServers: ServerInfo[]): RankedServer[] {
