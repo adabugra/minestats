@@ -1,0 +1,24 @@
+{
+  "extends": [
+    "config:recommended"
+  ],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "non-breaking deps"
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 3am on monday"
+    ]
+  }
+}
