@@ -15,7 +15,7 @@
   "dependencies": {
     "@tabler/icons-svelte": "^3.41.1",
     "echarts": "^6.0.0",
-    "svelte": "^5.55.4"
+    "svelte": "^5.55.5"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
