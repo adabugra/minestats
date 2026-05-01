@@ -16,10 +16,10 @@
       "groupName": "non-breaking deps"
     }
   ],
+  "postUpdateOptions": [
+    "pnpmDedupe"
+  ],
   "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": [
-      "before 3am on monday"
-    ]
+    "enabled": false
   }
 }
