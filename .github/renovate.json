@@ -1,25 +1,98 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticPrefixFixDepsChoreOthers",
+    ":prHourlyLimit5",
+    ":prConcurrentLimit10",
+    ":maintainLockFilesWeekly",
+    ":dependencyDashboard"
   ],
-  "prHourlyLimit": 10,
-  "rangeStrategy": "bump",
+  "schedule": [
+    "after 8am and before 6pm on monday to friday"
+  ],
+  // Keep lockfiles fresh even if no dependency changed
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ],
+    "commitMessageAction": "maintain pnpm lockfiles"
+  },
+  // Replace ranges in package.json with updated versions
+  "rangeStrategy": "replace",
+  // Configure PNPM-specific options
+  "pnpm": {
+    "enabled": true,
+    "postUpdateOptions": [
+      "pnpmDedupe"
+    ]
+  },
+  // Enable other managers
+  "docker": {
+    "enabled": true,
+    "pinDigests": true
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  // Group related dependencies together
   "packageRules": [
     {
-      "matchManagers": [
-        "npm"
-      ],
       "matchUpdateTypes": [
-        "minor",
-        "patch"
+        "patch",
+        "digest"
       ],
-      "groupName": "non-breaking deps"
+      "automerge": true,
+      "automergeType": "branch"
+    },
+    {
+      "groupName": "React ecosystem",
+      "matchPackagePatterns": [
+        "^react",
+        "^@types/react",
+        "^react-dom",
+        "^eslint-plugin-react"
+      ]
+    },
+    {
+      "groupName": "Build & tooling",
+      "matchPackagePatterns": [
+        "webpack",
+        "vite",
+        "rollup",
+        "typescript"
+      ]
+    },
+    {
+      "groupName": "Linters & formatters",
+      "matchPackagePatterns": [
+        "eslint",
+        "prettier",
+        "stylelint"
+      ]
+    },
+    {
+      "groupName": "Node.js types",
+      "matchPackagePatterns": [
+        "^@types/node"
+      ]
+    },
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": [
+        "github-actions"
+      ]
     }
   ],
-  "postUpdateOptions": [
-    "pnpmDedupe"
+  "baseBranches": [
+    "main"
   ],
-  "lockFileMaintenance": {
-    "enabled": false
-  }
+  "enabledManagers": [
+    "pnpm",
+    "gomod",
+    "dockerfile",
+    "github-actions"
+  ]
 }
