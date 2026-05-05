@@ -4,11 +4,11 @@
     "config:recommended",
     ":semanticCommits",
     ":semanticPrefixFixDepsChoreOthers",
-    ":prHourlyLimit5",
-    ":prConcurrentLimit10",
     ":maintainLockFilesWeekly",
     ":dependencyDashboard"
   ],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
   "schedule": [
     "after 8am and before 6pm on monday to friday"
   ],
