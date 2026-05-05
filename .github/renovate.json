@@ -22,21 +22,10 @@
   },
   // Replace ranges in package.json with updated versions
   "rangeStrategy": "replace",
-  // Configure PNPM-specific options
-  "pnpm": {
-    "enabled": true,
-    "postUpdateOptions": [
-      "pnpmDedupe"
-    ]
-  },
-  // Enable other managers
-  "docker": {
-    "enabled": true,
-    "pinDigests": true
-  },
-  "github-actions": {
-    "enabled": true
-  },
+  "postUpdateOptions": [
+    "pnpmDedupe"
+  ],
+  "pinDigests": true,
   // Group related dependencies together
   "packageRules": [
     {
@@ -49,16 +38,17 @@
     },
     {
       "groupName": "React ecosystem",
-      "matchPackagePatterns": [
-        "^react",
-        "^@types/react",
-        "^react-dom",
-        "^eslint-plugin-react"
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom",
+        "eslint-plugin-react**"
       ]
     },
     {
       "groupName": "Build & tooling",
-      "matchPackagePatterns": [
+      "matchPackageNames": [
         "webpack",
         "vite",
         "rollup",
@@ -67,16 +57,19 @@
     },
     {
       "groupName": "Linters & formatters",
-      "matchPackagePatterns": [
+      "matchPackageNames": [
         "eslint",
+        "eslint**",
         "prettier",
-        "stylelint"
+        "prettier**",
+        "stylelint",
+        "stylelint**"
       ]
     },
     {
       "groupName": "Node.js types",
-      "matchPackagePatterns": [
-        "^@types/node"
+      "matchPackageNames": [
+        "@types/node"
       ]
     },
     {
@@ -90,7 +83,7 @@
     "main"
   ],
   "enabledManagers": [
-    "pnpm",
+    "npm",
     "gomod",
     "dockerfile",
     "github-actions"
