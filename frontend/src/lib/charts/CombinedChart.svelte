@@ -56,17 +56,30 @@
 
   function buildOption(animateTransition: boolean): echarts.EChartsOption {
     const theme = getEChartsTheme(dark);
-    const peakOnline = Math.max(
-      0,
-      ...series.flatMap((entry) => entry.data.map(([, value]) => (typeof value === 'number' ? value : 0)))
-    );
+    let peakOnline = 0;
+    let longestSeries = 0;
+    for (const entry of series) {
+      if (entry.data.length > longestSeries) longestSeries = entry.data.length;
+      for (const [, value] of entry.data) {
+        if (typeof value === 'number' && value > peakOnline) {
+          peakOnline = value;
+        }
+      }
+    }
+
+    const isLongRange = rangeKey === '24h' || rangeKey === '7d' || rangeKey === 'all';
+    const useSmoothLines = !isLongRange && longestSeries < 1200;
+    const showArea = !isLongRange && longestSeries < 2500;
+    const enableAnimation = animateTransition && longestSeries < 2000;
 
     return {
       ...theme,
-      animation: animateTransition,
-      animationDuration: animateTransition ? 350 : 0,
-      animationDurationUpdate: animateTransition ? 450 : 0,
+      animation: enableAnimation,
+      animationDuration: enableAnimation ? 350 : 0,
+      animationDurationUpdate: enableAnimation ? 450 : 0,
       animationEasingUpdate: 'cubicOut',
+      progressive: 2000,
+      progressiveThreshold: 3000,
       legend: { show: false },
       tooltip: {
         ...(theme.tooltip ?? {}),
@@ -170,19 +183,21 @@
         return {
           name: entry.name,
           type: 'line',
-          smooth: true,
+          smooth: useSmoothLines,
           symbol: 'none',
           sampling: 'lttb',
           lineStyle: {
             color: lineColor,
-            width: 2.4
+            width: isLongRange ? 2 : 2.4
           },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: hexToRgba(lineColor, dark ? 0.22 : 0.18) },
-              { offset: 1, color: hexToRgba(lineColor, 0.02) }
-            ])
-          },
+          areaStyle: showArea
+            ? {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: hexToRgba(lineColor, dark ? 0.22 : 0.18) },
+                  { offset: 1, color: hexToRgba(lineColor, 0.02) }
+                ])
+              }
+            : undefined,
           data: entry.data
         };
       })

@@ -39,6 +39,7 @@
         key: "15m" | "1h" | "6h" | "24h" | "7d" | "all";
         label: string;
         minutes: number;
+        bucketSeconds: number;
     };
 
     type RankedServer = {
@@ -48,12 +49,12 @@
     };
 
     const ranges: RangeOption[] = [
-        { key: "15m", label: "15m", minutes: 15 },
-        { key: "1h", label: "1h", minutes: 60 },
-        { key: "6h", label: "6h", minutes: 360 },
-        { key: "24h", label: "24h", minutes: 1440 },
-        { key: "7d", label: "7d", minutes: 10080 },
-        { key: "all", label: "all", minutes: 10080 },
+        { key: "15m", label: "15m", minutes: 15, bucketSeconds: 0 },
+        { key: "1h", label: "1h", minutes: 60, bucketSeconds: 0 },
+        { key: "6h", label: "6h", minutes: 360, bucketSeconds: 0 },
+        { key: "24h", label: "24h", minutes: 1440, bucketSeconds: 30 },
+        { key: "7d", label: "7d", minutes: 10080, bucketSeconds: 300 },
+        { key: "all", label: "all", minutes: 0, bucketSeconds: 600 },
     ];
 
     const palette = [
@@ -85,12 +86,19 @@
     let hasLoadedOnce = false;
     let faviconCache: Record<string, { value: string; updatedAt: number }> = {};
     let historyCache: Record<
-        number,
+        string,
         {
             fetchedAt: number;
             series: Record<string, [number, number | null][]>;
         }
     > = {};
+    let combinedSeriesBaseSource: Record<string, [number, number | null][]> | null =
+        null;
+    let combinedSeriesBase: {
+        key: string;
+        color: string;
+        data: [number, number | null][];
+    }[] = [];
 
     let themeMode: ThemeMode = "system";
     let isDark = false;
@@ -127,6 +135,14 @@
         return (
             ranges.find((range) => range.key === selectedRange)?.minutes ?? 360
         );
+    }
+
+    function activeRangeOption() {
+        return ranges.find((range) => range.key === selectedRange) ?? ranges[2];
+    }
+
+    function historyCacheKey(minutes: number, bucketSeconds: number) {
+        return `${minutes}:${bucketSeconds}`;
     }
 
     function formatServerAddress(address: string) {
@@ -395,10 +411,14 @@
         return stabilized;
     }
 
-    async function fetchHistory(minutes: number) {
-        const historyRes = await fetch(
-            `${apiBase}/api/history?minutes=${minutes}`,
-        );
+    async function fetchHistory(minutes: number, bucketSeconds = 0) {
+        const params = new URLSearchParams();
+        params.set("minutes", String(minutes));
+        if (bucketSeconds > 0) {
+            params.set("bucket_seconds", String(bucketSeconds));
+        }
+
+        const historyRes = await fetch(`${apiBase}/api/history?${params}`);
         if (!historyRes.ok) throw new Error("API request failed");
         const historyJson = await historyRes.json();
         const rawSeries = (historyJson.series ?? {}) as Record<
@@ -408,18 +428,23 @@
         return normalizeHistorySeries(rawSeries);
     }
 
-    async function fetchHistoryCached(minutes: number, ttlMs: number) {
+    async function fetchHistoryCached(
+        minutes: number,
+        bucketSeconds: number,
+        ttlMs: number,
+    ) {
         const nowMs = Date.now();
-        const cached = historyCache[minutes];
+        const cacheKey = historyCacheKey(minutes, bucketSeconds);
+        const cached = historyCache[cacheKey];
         if (cached && nowMs - cached.fetchedAt < ttlMs) {
             return cached.series;
         }
 
-        const series = await fetchHistory(minutes);
+        const series = await fetchHistory(minutes, bucketSeconds);
         const fetchedAt = Date.now();
         historyCache = {
             ...historyCache,
-            [minutes]: {
+            [cacheKey]: {
                 fetchedAt,
                 series,
             },
@@ -430,19 +455,23 @@
     async function refresh() {
         try {
             if (!hasLoadedOnce) loading = true;
+            const activeRange = activeRangeOption();
             const [serversRes, fixedStatsSeries, fixedMiniSeries, rangeSeries] =
                 await Promise.all([
                     fetch(`${apiBase}/api/servers`),
                     fetchHistoryCached(
                         STATS_HISTORY_MINUTES,
+                        0,
                         STATS_HISTORY_TTL_MS,
                     ),
                     fetchHistoryCached(
                         MINI_HISTORY_MINUTES,
+                        0,
                         MINI_HISTORY_TTL_MS,
                     ),
                     fetchHistoryCached(
-                        activeMinutes(),
+                        activeRange.minutes,
+                        activeRange.bucketSeconds,
                         COMBINED_HISTORY_TTL_MS,
                     ),
                 ]);
@@ -452,9 +481,15 @@
 
             const incomingServers = (serversJson.servers ?? []) as ServerInfo[];
             servers = applyFaviconCache(incomingServers, Date.now());
-            combinedSeriesSource = rangeSeries;
-            statsSeries = fixedStatsSeries;
-            miniSeries = fixedMiniSeries;
+            if (combinedSeriesSource !== rangeSeries) {
+                combinedSeriesSource = rangeSeries;
+            }
+            if (statsSeries !== fixedStatsSeries) {
+                statsSeries = fixedStatsSeries;
+            }
+            if (miniSeries !== fixedMiniSeries) {
+                miniSeries = fixedMiniSeries;
+            }
             errorMsg = "";
         } catch (err) {
             errorMsg = err instanceof Error ? err.message : "Unknown error";
@@ -466,10 +501,15 @@
 
     async function refreshCombinedSeries() {
         try {
-            combinedSeriesSource = await fetchHistoryCached(
-                activeMinutes(),
+            const activeRange = activeRangeOption();
+            const nextSeries = await fetchHistoryCached(
+                activeRange.minutes,
+                activeRange.bucketSeconds,
                 COMBINED_HISTORY_TTL_MS,
             );
+            if (combinedSeriesSource !== nextSeries) {
+                combinedSeriesSource = nextSeries;
+            }
             errorMsg = "";
         } catch (err) {
             errorMsg = err instanceof Error ? err.message : "Unknown error";
@@ -482,18 +522,26 @@
         await refreshCombinedSeries();
     }
 
-    $: rawCombinedSeries = Object.entries(combinedSeriesSource).map(
-        ([key, data], index) => ({
-            name:
-                servers.find(
-                    (server) => normalizeKey(server.id) === normalizeKey(key),
-                )?.name ?? key,
-            color: serverColor(index),
-            data: rowsWithBreaksForGaps(data, COMBINED_LINE_BREAK_GAP_MS),
-        }),
+    $: serverNamesByKey = new Map(
+        servers.map((server) => [normalizeKey(server.id), server.name]),
     );
 
-    $: combinedSeries = rawCombinedSeries;
+    $: if (combinedSeriesBaseSource !== combinedSeriesSource) {
+        combinedSeriesBase = Object.entries(combinedSeriesSource).map(
+            ([key, data], index) => ({
+                key,
+                color: serverColor(index),
+                data: rowsWithBreaksForGaps(data, COMBINED_LINE_BREAK_GAP_MS),
+            }),
+        );
+        combinedSeriesBaseSource = combinedSeriesSource;
+    }
+
+    $: combinedSeries = combinedSeriesBase.map((entry) => ({
+        name: serverNamesByKey.get(normalizeKey(entry.key)) ?? entry.key,
+        color: entry.color,
+        data: entry.data,
+    }));
 
     let resolvedTotal = 0;
     let peakOnline24h = 0;

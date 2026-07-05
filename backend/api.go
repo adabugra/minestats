@@ -58,19 +58,65 @@ func (a *API) handleServers(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleHistory(w http.ResponseWriter, r *http.Request) {
 	minutes := 60
+	allHistory := false
 	if q := r.URL.Query().Get("minutes"); q != "" {
+		if q == "all" || q == "0" {
+			allHistory = true
+			if a.cfg.HistoryRetentionHours > 0 {
+				minutes = a.cfg.HistoryRetentionHours * 60
+			}
+		} else {
+			v, err := strconv.Atoi(q)
+			if err == nil && v >= 1 && v <= 525600 {
+				minutes = v
+			}
+		}
+	}
+
+	bucketMS := int64(0)
+	if q := r.URL.Query().Get("bucket_seconds"); q != "" {
 		v, err := strconv.Atoi(q)
-		if err == nil && v >= 1 && v <= 10080 {
-			minutes = v
+		if err == nil && v >= 0 && v <= 86400 {
+			bucketMS = int64(v) * 1000
 		}
 	}
 
 	from := time.Now().Add(-time.Duration(minutes) * time.Minute).UnixMilli()
-	rows, err := a.db.QueryContext(r.Context(), `
+	if allHistory && a.cfg.HistoryRetentionHours <= 0 {
+		from = 0
+	}
+
+	query := `
 SELECT server_id, ts_ms, online_players, is_online
 FROM samples
 WHERE ts_ms >= ?
-ORDER BY ts_ms ASC;`, from)
+ORDER BY ts_ms ASC;`
+	args := []any{from}
+	if bucketMS > 0 {
+		query = `
+WITH bucketed AS (
+	SELECT
+		server_id,
+		((ts_ms / ?) * ?) AS bucket_ts,
+		MAX(ts_ms) AS max_ts
+	FROM samples
+	WHERE ts_ms >= ?
+	GROUP BY server_id, bucket_ts
+)
+SELECT
+	b.server_id,
+	b.bucket_ts,
+	s.online_players,
+	s.is_online
+FROM bucketed b
+JOIN samples s
+	ON s.server_id = b.server_id
+	AND s.ts_ms = b.max_ts
+ORDER BY b.bucket_ts ASC;`
+		args = []any{bucketMS, bucketMS, from}
+	}
+
+	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "query failed"})
 		return
@@ -98,10 +144,12 @@ ORDER BY ts_ms ASC;`, from)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from":    from,
-		"to":      time.Now().UnixMilli(),
-		"minutes": minutes,
-		"series":  series,
+		"from":        from,
+		"to":          time.Now().UnixMilli(),
+		"minutes":     minutes,
+		"bucket_ms":   bucketMS,
+		"all_history": allHistory,
+		"series":      series,
 	})
 }
 
