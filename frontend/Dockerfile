@@ -13,7 +13,7 @@ ENV VITE_WS_BASE=$VITE_WS_BASE
 
 RUN pnpm build
 
-FROM caddy:2.11.6-alpine@sha256:c776e0c6413b544d0459665e54ec7b8b2a15000c0cbee8b254da0067b1d184ff
+FROM caddy:2.11.6-alpine@sha256:d44355d3c2149dc580ce2cac735955d1c08d3d00882c30489c241aa51a5c10d9
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/dist /usr/share/caddy
